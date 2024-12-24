@@ -1,5 +1,113 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox
 import sqlite3
+
+class MainApp(QtWidgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+
+class LoginRegisterApp(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Kullanıcı Kayıt ve Giriş")
+        self.setGeometry(200, 200, 1960, 400)
+        self.initDatabase()
+        self.main_window = None
+        
+        self.layout = QVBoxLayout()
+        
+        # Kullanıcı adı ve şifre alanları
+        self.username_input = QLineEdit(self)
+        self.username_input.setPlaceholderText("Kullanıcı Adı")
+        self.layout.addWidget(self.username_input)
+        
+        self.password_input = QLineEdit(self)
+        self.password_input.setPlaceholderText("Şifre")
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.layout.addWidget(self.password_input)
+        
+        # Kayıt ve giriş butonları
+        self.register_button = QPushButton("Kayıt Ol", self)
+        self.register_button.clicked.connect(self.register_user)
+        self.layout.addWidget(self.register_button)
+        
+        self.login_button = QPushButton("Giriş Yap", self)
+        self.login_button.clicked.connect(self.login_user)
+        self.layout.addWidget(self.login_button)
+        
+        # Sonuçları göstermek için bir etiket
+        self.result_label = QLabel("")
+        self.layout.addWidget(self.result_label)
+        
+        self.setLayout(self.layout)
+    
+    def register_user(self):
+        username = self.username_input.text()
+        password = self.password_input.text()
+        
+        if username and password:
+            connection = sqlite3.connect("users.db")
+            cursor = connection.cursor()
+            
+            try:
+                cursor.execute("INSERT INTO user (username, password) VALUES (?, ?)", (username, password))
+                connection.commit()
+                QMessageBox.information(self, "Başarılı", "Kayıt işlemi tamamlandı.")
+            except sqlite3.IntegrityError:
+                QMessageBox.warning(self, "Hata", "Bu kullanıcı adı zaten alınmış.")
+            finally:
+                connection.close()
+        else:
+            QMessageBox.warning(self, "Hata", "Lütfen tüm alanları doldurun.")
+    
+    def login_user(self):
+        username = self.username_input.text()
+        password = self.password_input.text()
+        
+        if username and password:
+            connection = sqlite3.connect("users.db")
+            cursor = connection.cursor()
+            
+            cursor.execute("SELECT * FROM user WHERE username = ? AND password = ?", (username, password))
+            user = cursor.fetchone()
+            
+            if user:
+                QMessageBox.information(self, "Başarılı", "Giriş başarılı! Hoşgeldiniz.")
+            
+                # Ana pencereyi başlat
+                self.main_window = QtWidgets.QMainWindow()
+                self.ui = Ui_MainWindow()
+                self.ui.setupUi(self.main_window)
+                
+                # Login penceresini kapat ve ana pencereyi göster
+                self.close()
+                self.main_window.show()
+
+            else:
+                QMessageBox.warning(self, "Hata", "Kullanıcı adı veya şifre yanlış.")
+            
+            connection.close()
+        else:
+            QMessageBox.warning(self, "Hata", "Lütfen tüm alanları doldurun.")
+
+    def initDatabase(self):
+        """Veritabanını başlat ve gerekli tabloları oluştur."""
+        connection = sqlite3.connect("users.db")  # Kullanıcı veritabanına bağlan
+        cursor = connection.cursor()
+
+        # User tablosunu oluştur
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL
+            )
+        """)
+
+        connection.commit()
+        connection.close()
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -74,6 +182,7 @@ class Ui_MainWindow(object):
             """
         )
         self.connection.commit()
+        
 
     def loadPatients(self):
         """Load patients from the database into the table widget."""
@@ -220,8 +329,6 @@ class Ui_MainWindow(object):
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
-    MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
-    MainWindow.show()
+    login_window = LoginRegisterApp()
+    login_window.show()
     sys.exit(app.exec_())
