@@ -1,4 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
+import sqlite3
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -7,7 +8,7 @@ class Ui_MainWindow(object):
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         
-            # Başlık eklemek için QLabel
+        # Başlık eklemek için QLabel
         self.label_header = QtWidgets.QLabel(self.centralwidget)
         self.label_header.setGeometry(QtCore.QRect(650, 20, 460, 50))  # Konum ve boyut ayarı
         self.label_header.setText("PskManage")  # Başlık metni
@@ -17,7 +18,6 @@ class Ui_MainWindow(object):
         self.label_header.setFont(font)  # Yazı tipini başlığa uygula
         self.label_header.setAlignment(QtCore.Qt.AlignCenter)  # Başlığı ortala
         self.label_header.setObjectName("label_header")
-
 
         # Main Tab Widget
         self.tabWidget = QtWidgets.QTabWidget(self.centralwidget)
@@ -51,6 +51,40 @@ class Ui_MainWindow(object):
         self.tabWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
+        self.initDatabase()
+        self.loadPatients()
+    
+    def initDatabase(self):
+        """Initialize the SQLite database."""
+        self.connection = sqlite3.connect("patients.db")
+        self.cursor = self.connection.cursor()
+        
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS patients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                last_appointment TEXT NOT NULL,
+                next_appointment TEXT NOT NULL,
+                diagnosis TEXT,
+                current_drugs TEXT,
+                drug_history TEXT
+
+            )
+            """
+        )
+        self.connection.commit()
+
+    def loadPatients(self):
+        """Load patients from the database into the table widget."""
+        self.tableWidget.setRowCount(0)  # Clear the table first
+        self.cursor.execute("SELECT name, last_appointment, next_appointment FROM patients")
+        for row_data in self.cursor.fetchall():
+            row_position = self.tableWidget.rowCount()
+            self.tableWidget.insertRow(row_position)
+            for column, data in enumerate(row_data):
+                self.tableWidget.setItem(row_position, column, QtWidgets.QTableWidgetItem(str(data)))
+
     def setupTab1(self):
         # Title Label
         self.label_title = QtWidgets.QLabel(self.tab)
@@ -60,9 +94,6 @@ class Ui_MainWindow(object):
         self.label_title.setFont(font)
         self.label_title.setObjectName("label_title")
         
-        
-        
-
         # Table Widget
         self.tableWidget = QtWidgets.QTableWidget(self.tab)
         self.tableWidget.setGeometry(QtCore.QRect(800, 80, 700, 600))
@@ -76,11 +107,9 @@ class Ui_MainWindow(object):
         self.tableWidget.setObjectName("tableWidget")
         self.tableWidget.cellClicked.connect(self.switch_to_tab2)  # Connect cellClicked to method
 
-                # Form Layout
-              
+        # Form Layout
         self.formLayoutWidget = QtWidgets.QWidget(self.tab)
         self.formLayoutWidget.setGeometry(QtCore.QRect(310, 120, 300, 500))# Form Widget
-       
        
         # Name-Surname Input
         self.lineEdit_name = QtWidgets.QLineEdit(self.formLayoutWidget)
@@ -103,7 +132,6 @@ class Ui_MainWindow(object):
         self.lineEdit_next_appointment.setGeometry(QtCore.QRect(0, 250, 300, 40))  # Position and size
         self.lineEdit_next_appointment.setObjectName("lineEdit_next_appointment")
 
-
         # Add Button
         self.pushButton_add = QtWidgets.QPushButton(self.tab)
         self.pushButton_add.setGeometry(QtCore.QRect(350, 450, 171, 37))
@@ -112,25 +140,34 @@ class Ui_MainWindow(object):
         self.pushButton_add.clicked.connect(self.add_patient)  # Connect button to add_patient method
 
     def add_patient(self):
-        """Add patient details to the table dynamically."""
-        name = self.lineEdit_name.text()
-        last_appointment = self.lineEdit_last_appointment.text()
-        next_appointment = self.lineEdit_next_appointment.text()
+        """Add patient details to the table and the database."""
+        name = self.lineEdit_name.text().strip()
+        last_appointment = self.lineEdit_last_appointment.text().strip()
+        next_appointment = self.lineEdit_next_appointment.text().strip()
 
-        if name and last_appointment and next_appointment:
-            # Add a new row to the table
+        if not name or not last_appointment or not next_appointment:
+            QtWidgets.QMessageBox.warning(self.centralwidget, "Input Error", "Please fill in all fields!")
+            return
+
+        try:
+            self.cursor.execute(
+                "INSERT INTO patients (name, last_appointment, next_appointment) VALUES (?, ?, ?)",
+                (name, last_appointment, next_appointment)
+            )
+            self.connection.commit()
+
             row_position = self.tableWidget.rowCount()
             self.tableWidget.insertRow(row_position)
             self.tableWidget.setItem(row_position, 0, QtWidgets.QTableWidgetItem(name))
             self.tableWidget.setItem(row_position, 1, QtWidgets.QTableWidgetItem(last_appointment))
             self.tableWidget.setItem(row_position, 2, QtWidgets.QTableWidgetItem(next_appointment))
 
-            # Clear input fields after adding
+            # Clear input fields
             self.lineEdit_name.clear()
             self.lineEdit_last_appointment.clear()
             self.lineEdit_next_appointment.clear()
-        else:
-            QtWidgets.QMessageBox.warning(None, "Input Error", "Please fill in all fields!")
+        except sqlite3.Error as e:
+            QtWidgets.QMessageBox.critical(self.centralwidget, "Database Error", f"Error: {e}")
 
     def switch_to_tab2(self, row, column):
         """Switch to Tab 2 when a name is clicked."""
@@ -179,7 +216,6 @@ class Ui_MainWindow(object):
         self.pushButton_add.setText(_translate("MainWindow", "Add"))
         self.label_notes_title.setText(_translate("MainWindow", "My Notes"))
        
-
 # Main Execution
 if __name__ == "__main__":
     import sys
