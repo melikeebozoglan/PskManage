@@ -1,114 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox
 import sqlite3
-
-class MainApp(QtWidgets.QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self)
-
-class LoginRegisterApp(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Kullanıcı Kayıt ve Giriş")
-        self.setGeometry(200, 200, 1960, 400)
-        self.initDatabase()
-        self.main_window = None
-        
-        self.layout = QVBoxLayout()
-        
-        # Kullanıcı adı ve şifre alanları
-        self.username_input = QLineEdit(self)
-        self.username_input.setPlaceholderText("Kullanıcı Adı")
-        self.layout.addWidget(self.username_input)
-        
-        self.password_input = QLineEdit(self)
-        self.password_input.setPlaceholderText("Şifre")
-        self.password_input.setEchoMode(QLineEdit.Password)
-        self.layout.addWidget(self.password_input)
-        
-        # Kayıt ve giriş butonları
-        self.register_button = QPushButton("Kayıt Ol", self)
-        self.register_button.clicked.connect(self.register_user)
-        self.layout.addWidget(self.register_button)
-        
-        self.login_button = QPushButton("Giriş Yap", self)
-        self.login_button.clicked.connect(self.login_user)
-        self.layout.addWidget(self.login_button)
-        
-        # Sonuçları göstermek için bir etiket
-        self.result_label = QLabel("")
-        self.layout.addWidget(self.result_label)
-        
-        self.setLayout(self.layout)
-    
-    def register_user(self):
-        username = self.username_input.text()
-        password = self.password_input.text()
-        
-        if username and password:
-            connection = sqlite3.connect("users.db")
-            cursor = connection.cursor()
-            
-            try:
-                cursor.execute("INSERT INTO user (username, password) VALUES (?, ?)", (username, password))
-                connection.commit()
-                QMessageBox.information(self, "Başarılı", "Kayıt işlemi tamamlandı.")
-            except sqlite3.IntegrityError:
-                QMessageBox.warning(self, "Hata", "Bu kullanıcı adı zaten alınmış.")
-            finally:
-                connection.close()
-        else:
-            QMessageBox.warning(self, "Hata", "Lütfen tüm alanları doldurun.")
-    
-    def login_user(self):
-        username = self.username_input.text()
-        password = self.password_input.text()
-        
-        if username and password:
-            connection = sqlite3.connect("users.db")
-            cursor = connection.cursor()
-            
-            cursor.execute("SELECT * FROM user WHERE username = ? AND password = ?", (username, password))
-            user = cursor.fetchone()
-            
-            if user:
-                QMessageBox.information(self, "Başarılı", "Giriş başarılı! Hoşgeldiniz.")
-            
-                # Ana pencereyi başlat
-                self.main_window = QtWidgets.QMainWindow()
-                self.ui = Ui_MainWindow()
-                self.ui.setupUi(self.main_window)
-                
-                # Login penceresini kapat ve ana pencereyi göster
-                self.close()
-                self.main_window.show()
-
-            else:
-                QMessageBox.warning(self, "Hata", "Kullanıcı adı veya şifre yanlış.")
-            
-            connection.close()
-        else:
-            QMessageBox.warning(self, "Hata", "Lütfen tüm alanları doldurun.")
-
-    def initDatabase(self):
-        """Veritabanını başlat ve gerekli tabloları oluştur."""
-        connection = sqlite3.connect("users.db")  # Kullanıcı veritabanına bağlan
-        cursor = connection.cursor()
-
-        # User tablosunu oluştur
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
-            )
-        """)
-
-        connection.commit()
-        connection.close()
-
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -397,12 +288,136 @@ class Ui_MainWindow(object):
         self.label_title.setText(_translate("MainWindow", "Add New Patient"))
         self.pushButton_add.setText(_translate("MainWindow", "Add"))
         self.label_notes_title.setText(_translate("MainWindow", "My Notes"))
-             
+       
+# Main Execution
 # Main Execution
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
-    login_window = LoginRegisterApp()
-    login_window.show()
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    
+  
+    
+#     app.setStyleSheet("""
+#         QMainWindow {
+#         background-color: #f0f4f7; /* Genel arka plan rengi */
+#         border-radius: 10px; /* Pencere kenarlarını yuvarlat */
+#         padding: 20px;
+#     }
+    
+#     QLabel {
+#         color: #333;  /* Yazı rengi */
+#         font-size: 16px;  /* Yazı boyutu */
+#         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+#         font-weight: 600;  /* Kalın yazı */
+#     }
+    
+#     QLineEdit {
+#         background-color: #ffffff;  /* Giriş alanı arka plan rengi */
+#         border: 2px solid #4CAF50;  /* Border rengi */
+#         border-radius: 12px;  /* Yuvarlak köşe */
+#         padding: 10px;
+#         font-size: 14px;
+#     }
+    
+#     QLineEdit:focus {
+#         border-color: #1E8E3E;  /* Fokus halindeyken border rengi */
+#         box-shadow: 0 0 10px rgba(0, 255, 0, 0.3); /* Odaklandığında gölge */
+#     }
+    
+#     QPushButton {
+#         background-color: #4CAF50; /* Buton arka plan rengi */
+#         color: white; /* Buton yazı rengi */
+#         border: none; 
+#         border-radius: 12px; /* Yuvarlak kenarlar */
+#         padding: 15px 30px; 
+#         font-size: 16px;
+#         font-weight: bold;
+#         transition: all 0.3s ease; /* Geçiş efekti */
+#     }
+    
+#     QPushButton:hover {
+#         background-color: #45a049; /* Hover durumunda renk değişimi */
+#         transform: scale(1.05); /* Hover durumunda buton büyümesi */
+#     }
+    
+#     QPushButton:pressed {
+#         background-color: #388E3C; /* Tıklama durumunda buton rengi */
+#         transform: scale(0.98); /* Tıklanırken buton küçülmesi */
+#     }
+
+#     QTabWidget::pane {
+#         border: none;  /* Tab widget kenarlığını kaldır */
+#         background-color: #ffffff; /* Tabların arka planı */
+#         border-radius: 15px;  /* Yuvarlatılmış köşe */
+#     }
+
+#     QTabWidget::tab-bar {
+#         alignment: center;
+#         background-color: #f1f1f1; /* Tabların arka plan rengi */
+#         padding: 5px;
+#         border-radius: 12px;
+#     }
+    
+#     QTabWidget::tab {
+#         background-color: #f1f1f1;
+#         padding: 10px;
+#         border: 1px solid #dddddd;
+#         border-radius: 10px;
+#         font-size: 14px;
+#         font-weight: 600;
+#         color: #333;
+#     }
+    
+#     QTabWidget::tab:selected {
+#         background-color: #4CAF50;  /* Seçilen tabın rengi */
+#         color: white;
+#         font-weight: bold;
+#     }
+
+#     QTableWidget {
+#         background-color: #ffffff;  /* Tablo arka plan rengi */
+#         gridline-color: #ddd;
+#         font-size: 14px;  /* Yazı boyutu */
+#         border-radius: 10px;
+#         border: 1px solid #ddd;
+#     }
+
+#     QTableWidget QHeaderView {
+#         background-color: #f5f5f5;
+#         border: none;
+#     }
+
+#     QTableWidget::item {
+#         border: 1px solid #e0e0e0;
+#         padding: 8px;
+#         color: #333;
+#     }
+    
+#     QTableWidget::item:selected {
+#         background-color: #4CAF50;
+#         color: white;
+#     }
+
+#     QTextEdit {
+#         background-color: #ffffff;
+#         border: 2px solid #4CAF50;
+#         border-radius: 12px;
+#         padding: 10px;
+#         font-size: 14px;
+#         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+#     }
+
+#     QTextEdit:focus {
+#         border-color: #1E8E3E; /* Odaklandığında border rengi */
+#         box-shadow: 0 0 10px rgba(0, 255, 0, 0.3); /* Gölgeleme */
+#     }
+# """)
+
+
+ 
     sys.exit(app.exec_())
