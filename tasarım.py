@@ -210,6 +210,9 @@ class Ui_MainWindow(object):
         self.tableWidget.setHorizontalHeaderLabels(["Name-Surname", "Last Appointment", "Next Appointment"])
         header = self.tableWidget.horizontalHeader()
         header.setStretchLastSection(False)  # Disable stretch for the last section (optional)
+        self.tableWidget.setEditTriggers(QtWidgets.QTableWidget.DoubleClicked)  # Enable editing
+        self.tableWidget.itemChanged.connect(self.update_patient_data)  # Connect to update method
+
         for i in range(self.tableWidget.columnCount()):
             header.setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
         self.tableWidget.setObjectName("tableWidget")
@@ -285,6 +288,30 @@ class Ui_MainWindow(object):
         except sqlite3.Error as e:
             QtWidgets.QMessageBox.critical(self.centralwidget, "Database Error", f"Error: {e}")
 
+    def update_patient_data(self, item):
+        """Update the patient data in the database when a cell is edited."""
+        row = item.row()
+        column = item.column()
+        new_value = item.text()
+
+        # Check which column was edited
+        if column in (1, 2):  # Only update for Last or Next Appointment
+            try:
+                # Get the patient's name to identify the record
+                name = self.tableWidget.item(row, 0).text()
+
+                # Determine the column name to update
+                column_name = "last_appointment" if column == 1 else "next_appointment"
+
+                # Update the database
+                self.cursor.execute(
+                    f"UPDATE patients SET {column_name} = ? WHERE name = ?",
+                    (new_value, name)
+                )
+                self.connection.commit()
+            except sqlite3.Error as e:
+                QtWidgets.QMessageBox.critical(self.centralwidget, "Database Error", f"Error: {e}")
+
     def switch_to_tab2(self, row, column):
         """Switch to Tab 2 when a name is clicked."""
         if column == 0:  # Ensure only the Name-Surname column triggers the switch
@@ -322,8 +349,6 @@ class Ui_MainWindow(object):
         self.label_note_name.setFont(QtGui.QFont("", 12))
         self.label_note_name.setText("Name-Surname: ")
         h_layout_name.addWidget(self.label_note_name)
-
-        
 
         self.lineEdit_note_name = QtWidgets.QLineEdit(self.formLayoutWidget_2)
         self.lineEdit_note_name.setFont(QtGui.QFont("", 13))        
@@ -375,7 +400,7 @@ class Ui_MainWindow(object):
         
         self.formLayout_2.addLayout(h_layout_history)
         
-         # Kaydet Butonu
+        # Kaydet Butonu
         self.save_button = QtWidgets.QPushButton(self.tab_2)
         self.save_button.setGeometry(QtCore.QRect(390, 520, 200, 40))  # Butonun boyutları ve konumu
         self.save_button.setText("Kaydet")  # Buton metni
@@ -388,7 +413,6 @@ class Ui_MainWindow(object):
         name = self.lineEdit_note_name.text().strip()
         diagnosis = self.lineEdit_note_diagnosis.text().strip()
         current_drugs = self.lineEdit_note_current_drugs.text().strip()
-        drug_history = self.lineEdit_note_drug_history.text().strip()
         my_notes = self.textEdit_notes.toPlainText().strip()
 
         if not name:
@@ -404,37 +428,51 @@ class Ui_MainWindow(object):
             existing_data = self.cursor.fetchone()
 
             if existing_data:
-                # Append new data to existing data if provided
-                diagnosis = f"{existing_data[0]}\n{diagnosis}" if existing_data[0] and diagnosis else (diagnosis or existing_data[0])
-                current_drugs = f"{existing_data[1]}\n{current_drugs}" if existing_data[1] and current_drugs else (current_drugs or existing_data[1])
-                drug_history = f"{existing_data[2]}\n{drug_history}" if existing_data[2] and drug_history else (drug_history or existing_data[2])
-                drug_history = f"{existing_data[3]}\n{my_notes}" if existing_data[3] and my_notes else (my_notes or existing_data[3])
+                # Handle updates
+                existing_diagnosis, existing_current_drugs, existing_drug_history, existing_my_notes = existing_data
+
+                # Update diagnosis only if it is new and different
+                if diagnosis and diagnosis != existing_diagnosis:
+                    existing_diagnosis = diagnosis
+
+                # Manage current and history drugs
+                if existing_current_drugs and existing_current_drugs != current_drugs:
+                    # Move the old current_drugs to drug_history
+                    if existing_drug_history:
+                        drug_history = f"{existing_drug_history}\n{existing_current_drugs}"
+                    else:
+                        drug_history = existing_current_drugs
+                else:
+                    drug_history = existing_drug_history
+
+                # Update my_notes only with new additions
+                if my_notes and (not existing_my_notes or my_notes not in existing_my_notes):
+                    new_note = my_notes.replace(existing_my_notes, "").strip() if existing_my_notes else my_notes
+                    my_notes = f"{existing_my_notes}\n{new_note}" if existing_my_notes else new_note
+                else:
+                    my_notes = existing_my_notes
 
                 # Update the patient record
                 self.cursor.execute(
                     """
                     UPDATE patients SET diagnosis = ?, current_drugs = ?, drug_history = ?, my_notes = ? WHERE name = ?
                     """,
-                    (diagnosis, current_drugs, drug_history, my_notes, name),
+                    (existing_diagnosis, current_drugs, drug_history, my_notes, name),
                 )
             else:
                 # Insert new patient data
                 self.cursor.execute(
                     """
-                    INSERT INTO patients (name, diagnosis, current_drugs, drug_history, my_notes) VALUES (?, ?, ?, ?)
+                    INSERT INTO patients (name, diagnosis, current_drugs, drug_history, my_notes) VALUES (?, ?, ?, ?, ?)
                     """,
-                    (name, diagnosis, current_drugs, drug_history, my_notes),
+                    (name, diagnosis, current_drugs, "", my_notes),
                 )
 
             self.connection.commit()
 
-            # Clear input fields
-            # self.lineEdit_note_name.clear()
-            # self.lineEdit_note_diagnosis.clear()
-            # self.lineEdit_note_current_drugs.clear()
-            # self.lineEdit_note_drug_history.clear()
-            # self.textEdit_notes.clear()
+            self.load_patient_data()
 
+            # Clear input fields (optional)
             QtWidgets.QMessageBox.information(self.centralwidget, "Success", "Notes saved successfully!")
 
         except sqlite3.Error as e:
@@ -459,10 +497,11 @@ class Ui_MainWindow(object):
             patient_data = self.cursor.fetchone()
 
             if patient_data:
-                self.lineEdit_note_diagnosis.setText(patient_data[0] if patient_data[0] else "")
-                self.lineEdit_note_current_drugs.setText(patient_data[1] if patient_data[1] else "")
-                self.lineEdit_note_drug_history.setText(patient_data[2] if patient_data[2] else "")
-                self.textEdit_notes.setText(patient_data[3] if patient_data[3] else "")
+                diagnosis, current_drugs, drug_history, my_notes = patient_data
+                self.lineEdit_note_diagnosis.setText(diagnosis if diagnosis else "")
+                self.lineEdit_note_current_drugs.setText(current_drugs if current_drugs else "")
+                self.lineEdit_note_drug_history.setText(drug_history if drug_history else "")
+                self.textEdit_notes.setText(my_notes if my_notes else "")
                 QtWidgets.QMessageBox.information(self.centralwidget, "Data Loaded", "Patient data loaded successfully!")
             else:
                 self.lineEdit_note_diagnosis.clear()
@@ -475,12 +514,12 @@ class Ui_MainWindow(object):
             QtWidgets.QMessageBox.critical(self.centralwidget, "Database Error", f"Error: {e}")
 
     def retranslateUi(self, MainWindow):
-            _translate = QtCore.QCoreApplication.translate
-            MainWindow.setWindowTitle(_translate("MainWindow", "Patient Management System"))
-            self.label_title.setText(_translate("MainWindow", "Add New Patient"))
-            self.pushButton_add.setText(_translate("MainWindow", "Add"))
-            self.label_notes_title.setText(_translate("MainWindow", "My Notes"))
-                
+                    _translate = QtCore.QCoreApplication.translate
+                    MainWindow.setWindowTitle(_translate("MainWindow", "Patient Management System"))
+                    self.label_title.setText(_translate("MainWindow", "Add New Patient"))
+                    self.pushButton_add.setText(_translate("MainWindow", "Add"))
+                    self.label_notes_title.setText(_translate("MainWindow", "My Notes"))
+                                
 # Main Execution
 if __name__ == "__main__":
     import sys
