@@ -109,7 +109,6 @@ class LoginRegisterApp(QWidget):
         connection.commit()
         connection.close()
 
-
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -163,8 +162,6 @@ class Ui_MainWindow(object):
         self.initDatabase()
         self.loadPatients()
         
-   
-        
     def initDatabase(self):
         """Initialize the SQLite database."""
         self.connection = sqlite3.connect("patients.db")
@@ -179,8 +176,8 @@ class Ui_MainWindow(object):
                 next_appointment TEXT NOT NULL,
                 diagnosis TEXT,
                 current_drugs TEXT,
-                drug_history TEXT
-
+                drug_history TEXT,
+                my_notes TEXT
             )
             """
         )
@@ -307,7 +304,6 @@ class Ui_MainWindow(object):
         self.label_notes_title.setText("Patient")  # Başlık olarak "Patients" ekledik
         self.label_notes_title.setObjectName("label_notes_title")
 
-
         self.label_notes_title = QtWidgets.QLabel(self.tab_2)
         self.label_notes_title.setGeometry(QtCore.QRect(1080, 100, 351, 51))
         self.label_notes_title.setFont(QtGui.QFont("", 16))
@@ -327,11 +323,12 @@ class Ui_MainWindow(object):
         self.label_note_name.setText("Name-Surname: ")
         h_layout_name.addWidget(self.label_note_name)
 
+        
+
         self.lineEdit_note_name = QtWidgets.QLineEdit(self.formLayoutWidget_2)
-        self.lineEdit_note_name.setFont(QtGui.QFont("", 13))
-        
-        
+        self.lineEdit_note_name.setFont(QtGui.QFont("", 13))        
         self.lineEdit_note_name.setObjectName("lineEdit_note_name")
+        self.lineEdit_note_name.textChanged.connect(self.load_patient_data)  # Load data on name change
         h_layout_name.addWidget(self.lineEdit_note_name)
         
         self.formLayout_2.addLayout(h_layout_name)
@@ -350,7 +347,6 @@ class Ui_MainWindow(object):
         
         self.formLayout_2.addLayout(h_layout_diagnosis)
         
-
         # Current Drugs Input and Label
         h_layout_drugs = QtWidgets.QHBoxLayout()
         self.label_note_current_drugs = QtWidgets.QLabel(self.formLayoutWidget_2)
@@ -364,7 +360,6 @@ class Ui_MainWindow(object):
         h_layout_drugs.addWidget(self.lineEdit_note_current_drugs)
         
         self.formLayout_2.addLayout(h_layout_drugs)
-
 
         # Drug History Input and Label
         h_layout_history = QtWidgets.QHBoxLayout()
@@ -385,19 +380,107 @@ class Ui_MainWindow(object):
         self.save_button.setGeometry(QtCore.QRect(390, 520, 200, 40))  # Butonun boyutları ve konumu
         self.save_button.setText("Kaydet")  # Buton metni
         self.save_button.setFont(QtGui.QFont("", 12))  # Buton fontu
-        self.save_button.setEnabled(False)  # Butonun işlevsizlik durumuna getirilmesi
-            
-        
+        # self.save_button.setEnabled(False)  # Butonun işlevsizlik durumuna getirilmesi
+        self.save_button.clicked.connect(self.save_notes)  # Connect save button to save_notes method
 
+    def save_notes(self):
+        """Save or update patient notes in the database."""
+        name = self.lineEdit_note_name.text().strip()
+        diagnosis = self.lineEdit_note_diagnosis.text().strip()
+        current_drugs = self.lineEdit_note_current_drugs.text().strip()
+        drug_history = self.lineEdit_note_drug_history.text().strip()
+        my_notes = self.textEdit_notes.toPlainText().strip()
 
+        if not name:
+            QtWidgets.QMessageBox.warning(self.centralwidget, "Input Error", "Please enter the patient's name!")
+            return
+
+        try:
+            # Check if the patient exists
+            self.cursor.execute(
+                "SELECT diagnosis, current_drugs, drug_history, my_notes FROM patients WHERE name = ?",
+                (name,)
+            )
+            existing_data = self.cursor.fetchone()
+
+            if existing_data:
+                # Append new data to existing data if provided
+                diagnosis = f"{existing_data[0]}\n{diagnosis}" if existing_data[0] and diagnosis else (diagnosis or existing_data[0])
+                current_drugs = f"{existing_data[1]}\n{current_drugs}" if existing_data[1] and current_drugs else (current_drugs or existing_data[1])
+                drug_history = f"{existing_data[2]}\n{drug_history}" if existing_data[2] and drug_history else (drug_history or existing_data[2])
+                drug_history = f"{existing_data[3]}\n{my_notes}" if existing_data[3] and my_notes else (my_notes or existing_data[3])
+
+                # Update the patient record
+                self.cursor.execute(
+                    """
+                    UPDATE patients SET diagnosis = ?, current_drugs = ?, drug_history = ?, my_notes = ? WHERE name = ?
+                    """,
+                    (diagnosis, current_drugs, drug_history, my_notes, name),
+                )
+            else:
+                # Insert new patient data
+                self.cursor.execute(
+                    """
+                    INSERT INTO patients (name, diagnosis, current_drugs, drug_history, my_notes) VALUES (?, ?, ?, ?)
+                    """,
+                    (name, diagnosis, current_drugs, drug_history, my_notes),
+                )
+
+            self.connection.commit()
+
+            # Clear input fields
+            # self.lineEdit_note_name.clear()
+            # self.lineEdit_note_diagnosis.clear()
+            # self.lineEdit_note_current_drugs.clear()
+            # self.lineEdit_note_drug_history.clear()
+            # self.textEdit_notes.clear()
+
+            QtWidgets.QMessageBox.information(self.centralwidget, "Success", "Notes saved successfully!")
+
+        except sqlite3.Error as e:
+            QtWidgets.QMessageBox.critical(self.centralwidget, "Database Error", f"Error: {e}")
+
+    def load_patient_data(self):
+        """Load patient data into input fields based on the name."""
+        name = self.lineEdit_note_name.text().strip()
+
+        if not name:
+            self.lineEdit_note_diagnosis.clear()
+            self.lineEdit_note_current_drugs.clear()
+            self.lineEdit_note_drug_history.clear()
+            self.textEdit_notes.clear()
+            return
+
+        try:
+            self.cursor.execute(
+                "SELECT diagnosis, current_drugs, drug_history, my_notes FROM patients WHERE name = ?",
+                (name,)
+            )
+            patient_data = self.cursor.fetchone()
+
+            if patient_data:
+                self.lineEdit_note_diagnosis.setText(patient_data[0] if patient_data[0] else "")
+                self.lineEdit_note_current_drugs.setText(patient_data[1] if patient_data[1] else "")
+                self.lineEdit_note_drug_history.setText(patient_data[2] if patient_data[2] else "")
+                self.textEdit_notes.setText(patient_data[3] if patient_data[3] else "")
+                QtWidgets.QMessageBox.information(self.centralwidget, "Data Loaded", "Patient data loaded successfully!")
+            else:
+                self.lineEdit_note_diagnosis.clear()
+                self.lineEdit_note_current_drugs.clear()
+                self.lineEdit_note_drug_history.clear()
+                self.textEdit_notes.clear()
+                QtWidgets.QMessageBox.information(self.centralwidget, "No Data", "No data found for the entered patient name.")
+
+        except sqlite3.Error as e:
+            QtWidgets.QMessageBox.critical(self.centralwidget, "Database Error", f"Error: {e}")
 
     def retranslateUi(self, MainWindow):
-        _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "Patient Management System"))
-        self.label_title.setText(_translate("MainWindow", "Add New Patient"))
-        self.pushButton_add.setText(_translate("MainWindow", "Add"))
-        self.label_notes_title.setText(_translate("MainWindow", "My Notes"))
-             
+            _translate = QtCore.QCoreApplication.translate
+            MainWindow.setWindowTitle(_translate("MainWindow", "Patient Management System"))
+            self.label_title.setText(_translate("MainWindow", "Add New Patient"))
+            self.pushButton_add.setText(_translate("MainWindow", "Add"))
+            self.label_notes_title.setText(_translate("MainWindow", "My Notes"))
+                
 # Main Execution
 if __name__ == "__main__":
     import sys
